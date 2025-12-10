@@ -142,7 +142,7 @@ EProc$sPlotFingerprintY('NEE', Year = yyear)
 EProc$sPlotFingerprintY('LE', Year = yyear)
 ```
 
-![](Reddyproc_seasonal_ustar_files/figure-gfm/unnamed-chunk-2-2.png)<!-- -->
+![](../Reddyproc_seasonal_ustar_files/figure-gfm/unnamed-chunk-2-2.png)
 
 \#Estimating ustar threshold based on Papale et al., 2006 The second
 step, is the estimation of the distribution of uStar thresholds, to
