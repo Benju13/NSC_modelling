@@ -1,0 +1,501 @@
+---
+title: "Fine root production"
+author: "Benju" 
+date: "2024-06-10"
+output: html_document
+---
+
+This code is based on Moeka Ono old code for CBC 
+Moeka's code gihub link:
+https://github.com/moekaono/soil_C_balance_CBC/blob/main/Codes/Root_graph_v4.md
+
+# Fine Root Production Analysis - Shortleaf Pine Forest
+
+## Project Information
+
+**Project Title:** Ecosystem-scale non-structural carbon dynamics in shortleaf pine forest during dry and wet years
+
+**Location:** US-CRK flux tower site, Davy Crockett National Forest, Texas
+
+**Data Period:** 2021-2023
+
+**Analysis Goal:** Quantify fine root production using multiple estimation methods and calculate monthly production estimates with plot-level uncertainty
+
+## Analysis Workflow
+### 1. Data Cleaning
+- Load raw root collar data from field collections
+- Standardize column names for consistency
+- Parse sampling dates and extract year, month identifiers
+
+### 2. Unit Conversion
+- Convert biomass measurements to carbon content using 47% conversion factor (Cornell lab analysis)
+- Calculate gC/m² based on collar sampling area (5.2 cm diameter = 0.0213 m²)
+
+### 3. Plot-Level Aggregation
+- Calculate monthly mean biomass for live fine roots (LF) and dead fine roots (DF)
+- Aggregate across collar replicates within each plot
+- Maintain separate time series for each plot
+
+### 4. Time Series Preparation
+- Calculate month-to-month changes in LF and DF biomass at the plot level
+- Remove October 2023 data (insufficient replication)
+- Track each plot's temporal dynamics independently
+
+### 5. Production Estimation
+Apply six different estimation methods to calculate production:
+
+- **m1_p** — Harris method: Live root increments only
+- **dcs_p** — Decision matrix (Gower 1992)
+- **dcs2_p** — Modified decision matrix (Assefa 2017, Brunner 2011)
+- **dcs3_p** — Yuan 2013 decision matrix  
+- **dcs4_p** — McClaugherty et al 1982 decision matrix
+- **cmp_p** — Compartment flow method (Santantonio 1987)
+
+### 6. Monthly Aggregation
+- Calculate mean production for each method by month across all plots
+- Compute standard error from plot-to-plot variation
+- Generate comparison figures for all methods
+
+### 7. Combined Estimate
+- Average methods dcs_p, dcs2_p, dcs3_p, and dcs4_p for final production estimate
+- Calculate standard error from plot-level differences
+- Create bar plots with error bars for manuscript
+
+**Uncertainty representation:** Standard errors reflect plot-to-plot variation
+
+
+```{r Load libraries}
+
+remove(list = ls())
+if (!requireNamespace("pacman", quietly = TRUE)) {
+  install.packages("pacman")
+}
+pacman::p_load(ggplot2, readxl, dplyr, measurements, SciViews, googlesheets4, tidyverse, 
+               lattice, plotrix, writexl, nlme, car, vegan, ggResidpanel, lme4, 
+               moments, gridExtra,REddyProc,bigleaf,tidyr,RespChamberProc,parsedate,broom,stringr,data.table,forestmangr,readr,lubridate,psych,FluxGapsR,remotes,patchwork, grid)
+
+```
+
+Working directory 
+
+```{r}
+# setwd("C:/Benju/R_data_play/Southern Pine Data Analysis/Figures/Manuscript figures/")
+```
+
+Read data 
+Don't forgt to delete NA columns in csv file before using this code
+Recheck raw roots 
+```{r reading roots data}
+root_raw <- read_csv("C:/Benju/R_data_play/Southern Pine Data Analysis/Input/RootRecheckedData_DKBB_FINAL.csv")
+```
+
+
+```{r clean up data}
+colnames(root_raw) <- 
+  c("Processing_date","RECHECKED BY", "IN BAG?", "Author", "Year", "Method","MonthLabel", "Sampling_Date", 
+    "Plot", "Collar", "Total_mass", "DB", 
+    "LB", "DC", "LC", "DF", "LF", "Charcoal",
+    "Notes", "fungi", "DATEISSUE")
+
+# delete columns 
+#root_raw <- root_raw %>% select(-c(22))
+
+# Add row ID for tracking
+root_raw <- mutate(root_raw, ID = row_number()) # Just for removing rows later -removes NA?
+
+# Parse dates and extract time components
+root_raw$Date <- mdy(root_raw$MonthLabel)
+root_raw <- root_raw %>%  mutate(year = year(Date),
+                                 month_num = month(Date),
+                                 month_name = format(Date, "%b"))
+
+```
+
+
+```{r Unit conversion}
+# Biomass to gC/m2
+area <- (5.2*0.01/2)^2 * pi # area (in m²)
+
+# Convert biomass columns to numeric
+root_raw <- root_raw %>% mutate(across(.cols = c(DF,LF,DC,LC,Charcoal), .fns = as.numeric))
+
+## Calculate carbon content (47% from Cornell lab root analysis)
+root_raw <-
+  root_raw %>%
+  mutate(DF_gC = DF*0.47/area,   # DF_gC (gC/m2)
+         LF_gC = LF*0.47/area)   # LF_gC (gC/m2)
+```
+
+
+```{r Working dataframe}
+# Filter out rows with missing DF or LF values
+root <- root_raw %>%  filter(!is.na(DF) & !is.na(LF))
+
+root <- root %>% select(c( "Author", "Date", 
+                           "Plot", "Collar", "DF", "LF", "year", "month_num", "month_name", "DF_gC", "LF_gC"))
+
+## Sort by Date 
+root <- root %>% arrange(Date)
+```
+
+
+```{r calculate plot mean}
+root_plmean <- root %>%
+  group_by(Plot, year, month_num, month_name) %>%
+  summarise(across(c(DF_gC, LF_gC), 
+                   list(mean = ~mean(., na.rm = TRUE), 
+                        sd = ~sd(., na.rm = TRUE),
+                        n = ~sum(!is.na(.))))) %>%
+  arrange(Plot) %>% 
+  mutate(LF_per = 100*LF_gC_mean/(LF_gC_mean + DF_gC_mean),
+         DF_per = 100*DF_gC_mean/(LF_gC_mean + DF_gC_mean))
+
+# Remove rows where year, DF_gC_mean, OR LF_gC_mean is NA
+root_plmean <- root_plmean %>%
+  filter(!is.na(year) & !is.na(DF_gC_mean) & !is.na(LF_gC_mean))
+
+```
+
+
+```{r }
+################################################################################
+#INITIAL VISUALIZATION - ROOT BIOMASS PATTERNS
+################################################################################
+
+month_order <- c("Jan", "Feb", "Mar", "Apr", "May", "Jun", 
+                 "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+
+# Convert month_name to an ordered factor in your data
+root_plmean <- root_plmean %>%
+  mutate(month_name = factor(month_name, levels = month_order, ordered = TRUE))
+
+# live fine root biomass
+p_lf <- ggplot(root_plmean) + 
+  geom_boxplot(aes(x = month_name, y = LF_gC_mean, fill = factor(year))) + 
+  theme_bw() + 
+  xlab("") +
+  ylab("Live Fine Root Biomass (gC/m2)") +
+  ggtitle("Changes in Live Fine Root Biomass (gC/m2)") +
+  scale_fill_brewer(palette = "Set2", name = "Year") +
+  facet_wrap(~ year, ncol = 1) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+# dead fine root biomass
+p_df <- ggplot(root_plmean) + 
+  geom_boxplot(aes(x = month_name, y = DF_gC_mean, fill = factor(year))) + 
+  theme_bw() + 
+  xlab("") +
+  ylab("Dead Fine Root Biomass (gC/m2)") +
+  ggtitle("Changes in Dead Fine Root Biomass (gC/m2)") +
+  scale_fill_brewer(palette = "Set2", name = "Year") +
+  facet_wrap(~ year, ncol = 1) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+grid.arrange(p_lf,p_df, ncol= 2)
+
+```
+
+Maybe we need to remove some outliers checking collar level data 
+```{r}
+# Remove only extreme outliers (beyond 3 IQR)
+# Identify specific outlier values and check your raw data
+# Remove only extreme outliers (beyond 3 IQR instead of 1.5)
+# COde below doesnt apply as all data are below that threshold 
+root_plmean <- root_plmean %>%
+  filter(!is.na(year) &
+           !is.na(DF_gC_mean) &
+           !is.na(LF_gC_mean) &
+           LF_gC_mean <= 75 &        # Live fine root threshold
+           DF_gC_mean <= 60)          # Dead fine root threshold
+# Recheck
+
+# Now create your plot
+p_lf <- ggplot(root_plmean) +
+  geom_boxplot(aes(x = month_name, y = LF_gC_mean, fill = factor(year))) +
+  theme_bw() +
+  xlab("") +
+  ylab("Live Fine Root Biomass (gC/m2)") +
+  ggtitle("Changes in Live Fine Root Biomass (gC/m2)") +
+  scale_fill_brewer(palette = "Set2", name = "Year") +
+  facet_wrap(~ year, ncol = 1) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+print(p_lf)
+
+# temporal changes in DF
+# Now create your plot
+p_df <- ggplot(root_plmean) +
+  geom_boxplot(aes(x = month_name, y = DF_gC_mean, fill = factor(year))) +
+  theme_bw() +
+  xlab("") +
+  ylab("Dead Fine Root Biomass (gC/m2)") +
+  ggtitle("Changes in Dead Fine Root Biomass (gC/m2)") +
+  scale_fill_brewer(palette = "Set2", name = "Year") +
+  facet_wrap(~ year, ncol = 1) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+print(p_df)
+
+grid.arrange(p_lf,p_df, ncol= 2)
+
+```
+
+```{r}
+################################################################################
+# PREPARE PLOT-LEVEL DATA FOR PRODUCTION ESTIMATION
+################################################################################
+
+# Sort by plot and date
+root_plmean  <- root_plmean %>% 
+  arrange(Plot, year, month_num, month_name) %>% 
+  ungroup() %>% 
+  mutate(MY = paste(year, month_num, sep = "-")) # Add month-year identifier
+
+# Build a proper month index using numeric year/month
+unique_MY <- root_plmean%>%
+  distinct(year, month_num) %>%
+  arrange(year, month_num) %>%
+  mutate(M = row_number())
+
+root_plmean<- root_plmean%>%
+  left_join(unique_MY, by = c("year","month_num"))
+
+#root_plmean<- root_plmean%>% drop_na()
+################################################################################
+# REMOVE OCTOBER 2023 DATA (only 1 data point)
+################################################################################
+
+# Remove October 2023 from the dataset and use Nov directly.. do the average from Nov 
+root_plmean<- root_plmean%>%
+  filter(!(year == 2023 & month_num == 10))
+
+# Now when you calculate differences, it will automatically skip October
+# and calculate Nov-Sept difference instead
+
+# Calculate differences between consecutive months AT PLOT LEVEL
+root_diff_plot <- root_plmean%>%
+  group_by(Plot) %>%  # KEY: Group by plot to track each plot's time series
+  arrange(Plot, year, month_num) %>%
+  mutate(
+    LF_diff = LF_gC_mean - lag(LF_gC_mean),
+    DF_diff = DF_gC_mean - lag(DF_gC_mean),
+    MY_diff = M - lag(M)
+  ) %>%
+  ungroup()
+```
+
+
+### Root production and mortality estimation
+To get a final annual estimation for production, get an average value from methods 1, 2, and 4. Regarding a mortality estimation, the compartment flow method (Method 3) was used since the decomposition rate is taken into consideration. 
+
+
+### Method 1 (P: Harris 1977,; M: Joslin 1987 ??).
+P = the sum of the LF increments
+
+### Method 2: Decision matrix (Gower 1992). (dcs_)
+## 3-month sample interval
+## modified from MacClaugherty et al 1982 & Fairley and Alexander 1985
+Production can be negatvie
+Four cases present:
+1: LF increase, DF increase / P= L+D, M = D
+2: LF increase, DF decrease / P = L, M = L
+3: LF decrease, DF increase / P = L+D, M = D
+4: LF decrease, DF decrease / P = 0, M = L
+
+
+### Method 3: Compartment flow method (Santantonio 1987).
+M(i) = D(i+1)-D(i) + kd1 
+P = L(i+1) + M(i)  
+Assuming the decomposition rate is constant. 
+k = the decomposition rate (0.6/yr, 0.05/mo), d1 = Dead Fine Root biomass at the previous month
+if the M < 0, set as 0
+
+### Method 4: Decision matrix by Assefa 2017 & Brunner 2011. (dcs2_)
+This method doesnt give neg production
+## Modified from Method 1 to prevent negative production
+## Four cases present:
+## 1: LF increase, DF increase / P = L+D (if L+D > 0, else 0), M = D
+## 2: LF increase, DF decrease / P = L, M = 0 or abs(L)
+## 3: LF decrease, DF increase / P = L+D (if L+D > 0, else 0), M = abs(L) or D
+## 4: LF decrease, DF decrease / P = 0, M = abs(L)
+
+### Method 5: Decision matrix by Yuan 2013. (dcs3_)
+Similar to method 2 for production, mortality estimates differ
+
+### Method 6: Decision matrix McClaugherty et al 1982. (dcs4_)
+## 1: LF increase, DF increase / P = L+D, M = D, Decomp = 0
+## 2: LF decrease, DF increase / P = max(L+D, 0), M = min(D, |L|)
+## 3: LF increase, DF decrease / P = L, M = 0
+## 4: LF decrease, DF decrease / P = 0, M = |L|
+## Key: Case 2 uses pmin/pmax to ensure non-negative production
+
+### Method 7: Max-min McClaugherty et al 1982. (MM)  
+
+
+```{r}
+################################################################################
+#DEFINE PRODUCTION ESTIMATION FUNCTION
+################################################################################
+
+root_estimation <- function(df){
+  df <- df %>% 
+    mutate(m1_p = ifelse(LF_diff > 0, LF_diff, 0),
+           ############################################
+           dcs_p = case_when(DF_diff > 0 ~ LF_diff + DF_diff,
+                             DF_diff < 0 ~ 
+                               ifelse(LF_diff > 0, LF_diff, 0)),
+           dcs_m = case_when(DF_diff > 0 ~ DF_diff,
+                             DF_diff < 0 ~ LF_diff),
+           #############################################
+           dcs2_p = case_when(DF_diff > 0 ~
+                                ifelse(LF_diff + DF_diff > 0,
+                                       LF_diff + DF_diff, 0),
+                              DF_diff < 0 ~ 
+                                ifelse(LF_diff > 0, LF_diff, 0)),
+           dcs2_m = case_when(DF_diff > 0 ~ 
+                                ifelse(LF_diff + DF_diff > 0,
+                                       DF_diff, abs(LF_diff)),
+                              DF_diff < 0 ~ abs(LF_diff)),
+           dcs2_d = case_when(DF_diff > 0 & LF_diff > 0 ~ 0,
+                              DF_diff > 0 & LF_diff < 0 ~
+                                ifelse(abs(LF_diff) > DF_diff,
+                                       abs(LF_diff) - DF_diff, 0),
+                              DF_diff < 0 & LF_diff > 0 ~ abs(DF_diff),
+                              DF_diff < 0 & LF_diff < 0 ~ abs(DF_diff) + abs(LF_diff)),
+           #####################################################
+           dcs3_p = case_when(DF_diff > 0 ~
+                                ifelse(LF_diff + DF_diff > 0,
+                                       LF_diff + DF_diff, 0),
+                              DF_diff < 0 ~ 
+                                ifelse(LF_diff > 0, LF_diff, 0)),
+           dcs3_m = case_when(DF_diff > 0 ~ 
+                                ifelse(LF_diff + DF_diff > 0,
+                                       DF_diff, abs(LF_diff)),
+                              DF_diff < 0 ~ 
+                                ifelse(LF_diff > 0,
+                                       0, abs(LF_diff))),
+           dcs3_d = case_when(DF_diff > 0 ~
+                                ifelse(LF_diff + DF_diff > 0,
+                                       0, abs(LF_diff + DF_diff)),
+                              DF_diff < 0 & LF_diff > 0 ~ abs(DF_diff),
+                              DF_diff < 0 & LF_diff < 0 ~ abs(DF_diff + LF_diff)),
+           #######################################################################
+           dcs4_p = case_when(DF_diff > 0 & LF_diff > 0 ~ LF_diff + DF_diff,
+                              DF_diff > 0 & LF_diff < 0 ~ pmin(LF_diff + DF_diff, 0), # pmin is for multiple vectors
+                              DF_diff < 0 ~ 
+                                ifelse(LF_diff > 0, LF_diff, 0)),
+           dcs4_m = case_when(DF_diff > 0 & LF_diff > 0 ~ DF_diff,
+                              DF_diff > 0 & LF_diff < 0 ~ pmin(DF_diff, abs(LF_diff)),
+                              DF_diff < 0 ~ abs(LF_diff)),
+           dcs4_d = case_when(DF_diff > 0 & LF_diff > 0 ~ 0,
+                              DF_diff > 0 & LF_diff < 0 ~ pmin(abs(LF_diff-DF_diff), 0),
+                              DF_diff < 0 & LF_diff > 0 ~ abs(DF_diff),
+                              DF_diff < 0 & LF_diff < 0 ~ abs(DF_diff) + abs(LF_diff)),
+           #####################################################
+           cmp_m_temp = DF_diff + 0.06*MY_diff*lag(DF_gC_mean)) %>%
+    mutate(cmp_m = ifelse(cmp_m_temp < 0, 0, cmp_m_temp)) %>%
+    mutate(cmp_p = LF_diff + cmp_m)
+  
+  return(df)
+}
+
+# Apply estimation function
+root_est_plot <- 
+  root_estimation(root_diff_plot) 
+```
+
+
+ROot estimation plot means 
+
+```{r}
+# First, pivot longer to get each method in its own row
+root_est_plot_monthly <- root_est_plot %>%
+  pivot_longer(
+    cols = c(m1_p, dcs_p, dcs2_p, dcs3_p, dcs4_p, cmp_p),
+    names_to = "Method",
+    values_to = "Production"
+  ) %>%
+  group_by(Method, year, month_num, month_name) %>%
+  summarise(
+    n_plots = sum(!is.na(Production)),
+    prod_mean = mean(Production, na.rm = TRUE),
+    prod_sd = sd(Production, na.rm = TRUE),
+    prod_se = prod_sd / sqrt(n_plots),
+    .groups = "drop"
+  ) %>%
+  mutate(month_name = factor(month_name, levels = month_order, ordered = TRUE)) %>%
+  arrange(year, month_num, Method)
+
+
+ggplot(root_est_plot_monthly, aes(x = month_name, y = prod_mean, color = Method)) +
+  geom_point(position = position_dodge(width = 0.3), size = 2) +
+  geom_errorbar(aes(ymin = prod_mean - prod_se, ymax = prod_mean + prod_se),
+                width = 0.2, position = position_dodge(width = 0.3)) +
+  facet_wrap(~ year, ncol = 1) +
+  theme_bw() +
+  xlab("Month") +
+  ylab("Fine Root Production (gC/m²/month)") +
+  ggtitle("Comparison of Methods for Estimating Root Productivity") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        legend.position = "right",
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank())
+```
+
+
+
+Plot 
+```{r}
+root_est_monthly <- root_est_plot %>%
+  mutate(
+    prod_mean = rowMeans(
+      select(., c(dcs_p, dcs2_p, dcs3_p, dcs4_p)),
+      na.rm = TRUE
+    )
+  ) %>%
+  group_by(year, month_num, month_name, Plot) %>%
+  summarise(
+    prod_plot_mean = mean(prod_mean, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  group_by(year, month_num, month_name) %>%
+  summarise(
+    n_plots = sum(!is.na(prod_plot_mean)),
+    prod_mean = mean(prod_plot_mean, na.rm = TRUE),
+    prod_sd = sd(prod_plot_mean, na.rm = TRUE),
+    prod_se = prod_sd / sqrt(n_plots),
+    .groups = "drop"
+  ) %>%
+  mutate(month_name = factor(month_name, levels = month_order, ordered = TRUE)) %>%
+  arrange(year, month_num)
+
+
+ggplot(root_est_monthly, aes(x = month_name, y = prod_mean, fill = factor(year))) +
+  geom_bar(stat = "identity", position = "dodge") +
+  geom_errorbar(aes(ymin = prod_mean - prod_se, ymax = prod_mean + prod_se),
+                width = 0.2, position = position_dodge(width = 0.9)) +
+  facet_wrap(~ year, ncol = 1) +
+  theme_bw() +
+  xlab("Month") +
+  ylab("Fine Root Production (gC/m²/month)") +
+  ggtitle("Combined Method - Root Production Estimates") +
+  scale_fill_brewer(palette = "Set2", name = "Year") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        legend.position = "right",
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank())
+```
+
+Save data 
+```{r}
+# Save the monthly production by method (for comparison figure)
+write_csv(root_est_plot_monthly, 
+          "C:/Benju/R_data_play/Southern Pine Data Analysis/Output/root_production_by_method_monthly.csv")
+
+# Save the combined method monthly production (for bar plot)
+write_csv(root_est_monthly, 
+          "C:/Benju/R_data_play/Southern Pine Data Analysis/Output/root_production_combined_monthly.csv")
+```
+
+
+

@@ -1,0 +1,192 @@
+
+
+==============================================
+Detailed Results for GPP_NT_f
+==============================================
+
+Linear Mixed Model ANOVA Results:
+Type III Analysis of Variance Table with Satterthwaite's method
+     Sum Sq Mean Sq NumDF DenDF F value Pr(>F)
+Year 946.28  473.14     2    14  0.4645 0.6378
+
+
+==============================================
+Detailed Results for Reco_NT_f
+==============================================
+
+Linear Mixed Model ANOVA Results:
+Type III Analysis of Variance Table with Satterthwaite's method
+     Sum Sq Mean Sq NumDF DenDF F value Pr(>F)
+Year 1508.8  754.39     2    14  0.9793 0.3999
+
+
+==============================================
+Detailed Results for NEE_f
+==============================================
+
+Linear Mixed Model ANOVA Results:
+Type III Analysis of Variance Table with Satterthwaite's method
+     Sum Sq Mean Sq NumDF DenDF F value  Pr(>F)  
+Year 2363.2  1181.6     2    14  4.2452 0.03622 *
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+
+Estimated Marginal Means:
+ Year emmean   SE   df lower.CL upper.CL
+ 2022   9.35 10.5 10.9    -13.7    32.39
+ 2023 -14.92 10.5 10.9    -38.0     8.12
+ 2024  -1.62 10.5 10.9    -24.7    21.42
+
+Degrees-of-freedom method: kenward-roger 
+Confidence level used: 0.95 
+
+
+Post-hoc Comparisons:
+ contrast            estimate   SE df t.ratio p.value
+ Year2022 - Year2023     24.3 8.34 14   2.909  0.0289
+ Year2022 - Year2024     11.0 8.34 14   1.315  0.4105
+ Year2023 - Year2024    -13.3 8.34 14  -1.595  0.2803
+
+Degrees-of-freedom method: kenward-roger 
+P value adjustment: tukey method for comparing a family of 3 estimates 
+
+
+==============================================
+Detailed Results for sr_avg
+==============================================
+
+Linear Mixed Model ANOVA Results:
+Type III Analysis of Variance Table with Satterthwaite's method
+     Sum Sq Mean Sq NumDF DenDF F value Pr(>F)
+Year 2338.2  1169.1     2    14  2.3242 0.1344
+
+
+==============================================
+Detailed Results for ra_avg
+==============================================
+
+Linear Mixed Model ANOVA Results:
+Type III Analysis of Variance Table with Satterthwaite's method
+     Sum Sq Mean Sq NumDF DenDF F value  Pr(>F)  
+Year 1814.5  907.25     2    14  4.2396 0.03634 *
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+
+Estimated Marginal Means:
+ Year emmean  SE   df lower.CL upper.CL
+ 2022   64.4 7.4 13.8     48.5     80.3
+ 2023   72.9 7.4 13.8     57.0     88.8
+ 2024   51.8 7.4 13.8     35.9     67.7
+
+Degrees-of-freedom method: kenward-roger 
+Confidence level used: 0.95 
+
+
+Post-hoc Comparisons:
+ contrast            estimate   SE df t.ratio p.value
+ Year2022 - Year2023     -8.5 7.31 14  -1.162  0.4938
+ Year2022 - Year2024     12.7 7.31 14   1.731  0.2286
+ Year2023 - Year2024     21.2 7.31 14   2.893  0.0298
+
+Degrees-of-freedom method: kenward-roger 
+P value adjustment: tukey method for comparing a family of 3 estimates 
+
+
+==============================================
+Detailed Results for rh_avg
+==============================================
+
+Linear Mixed Model ANOVA Results:
+Type III Analysis of Variance Table with Satterthwaite's method
+     Sum Sq Mean Sq NumDF DenDF F value Pr(>F)
+Year 374.15  187.07     2    14   0.902 0.4281
+
+
+==============================================
+Detailed Results for BP
+==============================================
+
+Linear Mixed Model ANOVA Results:
+Type III Analysis of Variance Table with Satterthwaite's method
+     Sum Sq Mean Sq NumDF DenDF F value  Pr(>F)  
+Year 2029.3  1014.6     2    14  4.5841 0.02942 *
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+
+Estimated Marginal Means:
+ Year emmean  SE   df lower.CL upper.CL
+ 2022   48.2 9.1 11.1     28.2     68.2
+ 2023   46.3 9.1 11.1     26.3     66.3
+ 2024   66.7 9.1 11.1     46.7     86.7
+
+Degrees-of-freedom method: kenward-roger 
+Confidence level used: 0.95 
+
+
+Post-hoc Comparisons:
+ contrast            estimate   SE df t.ratio p.value
+ Year2022 - Year2023     1.86 7.44 14   0.251  0.9661
+ Year2022 - Year2024   -18.51 7.44 14  -2.488  0.0634
+ Year2023 - Year2024   -20.37 7.44 14  -2.739  0.0399
+
+Degrees-of-freedom method: kenward-roger 
+P value adjustment: tukey method for comparing a family of 3 estimates 
+
+
+==============================================
+Detailed Results for FNSC
+==============================================
+
+Linear Mixed Model ANOVA Results:
+Type III Analysis of Variance Table with Satterthwaite's method
+     Sum Sq Mean Sq NumDF DenDF F value Pr(>F)  
+Year 6711.5  3355.8     2    14  4.9693 0.0234 *
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+
+Estimated Marginal Means:
+ Year emmean   SE   df lower.CL upper.CL
+ 2022   7.49 15.2 11.6   -25.86     40.8
+ 2023  42.80 15.2 11.6     9.46     76.1
+ 2024   7.17 15.2 11.6   -26.17     40.5
+
+Degrees-of-freedom method: kenward-roger 
+Confidence level used: 0.95 
+
+
+Post-hoc Comparisons:
+ contrast            estimate SE df t.ratio p.value
+ Year2022 - Year2023  -35.315 13 14  -2.718  0.0415
+ Year2022 - Year2024    0.317 13 14   0.024  0.9997
+ Year2023 - Year2024   35.632 13 14   2.742  0.0396
+
+Degrees-of-freedom method: kenward-roger 
+P value adjustment: tukey method for comparing a family of 3 estimates 
+
+
+==============================================
+Detailed Results for bp_ciezswki_abg
+==============================================
+
+Linear Mixed Model ANOVA Results:
+Type III Analysis of Variance Table with Satterthwaite's method
+     Sum Sq Mean Sq NumDF DenDF F value Pr(>F)  
+Year 485.65  242.83     2    14  3.3302 0.0656 .
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+
+==============================================
+Detailed Results for BP_fr_scaled_up
+==============================================
+
+Linear Mixed Model ANOVA Results:
+Type III Analysis of Variance Table with Satterthwaite's method
+     Sum Sq Mean Sq NumDF DenDF F value  Pr(>F)  
+Year 651.99     326     2    14  2.9537 0.08507 .
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
