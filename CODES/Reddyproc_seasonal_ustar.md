@@ -142,7 +142,7 @@ EProc$sPlotFingerprintY('NEE', Year = yyear)
 EProc$sPlotFingerprintY('LE', Year = yyear)
 ```
 
-![](Reddyproc_seasonal_ustar_files/figure-gfm/unnamed-chunk-2-2.png)<!-- -->
+![](../Reddyproc_seasonal_ustar_files/figure-gfm/unnamed-chunk-2-2.png)
 
 markdown ![](../Chapter1_figures/fingerprint_NEE_2024.png)
 
@@ -271,7 +271,6 @@ dev.off()
 ```
 
 markdown
-
 \## NEE Fingerprint Plot
 ![](../Chapter1_figures/fingerprint_NEE_f2024.png)
 
