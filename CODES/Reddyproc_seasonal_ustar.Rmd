@@ -242,7 +242,7 @@ dev.off()
 ```
  
  ## NEE Fingerprint Plot
-![](Chapter1_figures/fingerprint_NEE_2024.png)
+![](Figures/fingerprint_NEE_2024.png)
 
 ```{r}
 if (sitename == 'CRK') {
