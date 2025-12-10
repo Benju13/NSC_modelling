@@ -1,0 +1,722 @@
+---
+title: "Reddyproc_seasonal"
+author: "Benju"
+date: "2024-01-22"
+output: github_document
+---
+USED FOR CRK 2022, 2023, 2024
+Seasonal ustar filtering works better than the reddyproc ustar 
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+This is R scripts taken from Reddyproc and modified by me as required by data 
+Start with Reddyproc help 
+
+```{r help ReddyProc}
+#help("REddyProc")
+```
+
+Packages
+```{r Load libraries}
+
+if (!requireNamespace("pacman", quietly = TRUE)) {
+  install.packages("pacman")
+}
+pacman::p_load(ggplot2, readxl, dplyr, measurements, SciViews, googlesheets4, tidyverse, 
+               lattice, plotrix, writexl, nlme, car, vegan, ggResidpanel, lme4, 
+               moments, gridExtra,REddyProc,bigleaf,remotes,FluxGapsR)
+
+```
+
+PAR conversion to SWIN 
+SWIN = PPFD (μmol m⁻² s⁻¹) × 0.219 
+Approximate 45% of SWIN is par 
+1 W m⁻² of PAR corresponds to approximately 4.57 μmol m⁻² s⁻¹ of PPFD.
+Read data and change -9999 to nan
+Everytime change data and change ustar 
+```{r read data}
+yyear <- 2024
+sitename <- 'CRK' 
+filePath <- sprintf("C:/Benju/Matlab_data_play/SouthernPine_DataAnalysis/Input Data/ReddyProc/Seasonal/%s/rp%s_%d.csv", sitename, sitename, yyear)
+
+# Read the CSV file
+EddyData <- read_csv(filePath, show_col_types = FALSE)
+EddyData [EddyData == -9999] <- NA
+EddyData [EddyData == "NaN"] <- NA
+#Convert special table to data.frame 
+EddyData <- as.data.frame(EddyData)
+sum(is.na(EddyData$NEE))
+sum(is.na(EddyData$NEE))
+
+##USing PAR to get Rg values when Rg was missing 
+EddyData$Rg <- ifelse(EddyData$Year == 2024 &
+                     is.na(EddyData$Rg) &
+                     EddyData$DoY > 146,
+                     EddyData$PPFD * 0.219 / 0.45,
+                     EddyData$Rg)
+
+# Modify QC flag for 2024 Jan-Feb to allow QC 0 and 1
+if (yyear == 2024) {
+    EddyData$QC_flag <- ifelse(EddyData$DoY >= 1 & EddyData$DoY <= 60 & EddyData$QC_flag == 1,
+                               0,  # Change QC=1 to QC=0 for Jan-Feb 2024
+                               EddyData$QC_flag)
+}
+```
+
+```{r replace long run values}
+EddyData <- filterLongRuns(EddyData, "NEE")
+EddyData <- filterLongRuns(EddyData, "LE")
+```
+
+##+++ Add time stamp in POSIX time format
+```{r add new time column}
+EddyDataWithPosix <- fConvertTimeToPosix(
+  EddyData, 'YDH',Year = 'Year',Day = 'DoY', Hour = 'Hour') %>% 
+  filterLongRuns("NEE")
+```
+
+#+++ Initalize R5 reference class sEddyProc for post-processing of eddy data
+#+++ with the variables needed for post-processing later
+```{r}
+# Create the QF vector to match exact number of rows
+if (sitename == 'CRK') {
+  EProc <- sEddyProc$new(
+   'sitename', EddyDataWithPosix, c('NEE','Rg','Tair','VPD', 'Ustar','LE','Tsoil','SWC_5cm', 'SWC_20cm','QC_flag'))
+
+} else if (sitename == 'NC2') {
+  EProc <- sEddyProc$new(
+'sitename', EddyDataWithPosix, c('NEE','Rg','Tair','VPD', 'Ustar','LE','Tsoil'))
+   
+
+} else if (sitename == 'GA') {
+     EProc <- sEddyProc$new(
+'sitename', EddyDataWithPosix, c('NEE','Rg','Tair','VPD', 'Ustar','LE','Tsoil'))
+
+} else if (sitename == 'CST') {
+    EProc <- sEddyProc$new(
+'sitename', EddyDataWithPosix, c('NEE','Rg','Tair','VPD', 'Ustar','LE','Tsoil'))
+}
+
+```
+
+A fingerprint-plot of the source half-hourly shows already several gaps. A fingerprint-plot is a color-coded image of the half-hourly fluxes by daytime on the x and and day of the year on the y axis.
+```{r}
+EProc$sPlotFingerprintY('NEE', Year = yyear)
+EProc$sPlotFingerprintY('LE', Year = yyear)
+```
+
+#Estimating ustar threshold based on Papale et al., 2006 
+The second step, is the estimation of the distribution of uStar thresholds, to identify periods of low friction velocity (uStar), where NEE is biased low. Discarding periods with low uStar is one of the largest sources of uncertainty in aggregated fluxes. Hence, several quantiles of the distribution of the uncertain uStar threshold are estimated by a bootstrap.
+
+
+Gapfilling 
+## Gapfilling without applying ustar threshold or user defined ustar threshold 
+```{r}
+# sitename <- 'CRK'
+# #Now LE
+# # Think about how to handle leap year 
+# 
+# if (sitename == 'CRK') {QF <- rep(c(1, 0, 1, 0, 1, 0, 0, 0, 0, 0), nrow(EddyDataWithPosix) / 10)
+# 
+# #+++ Dummy step function vector to simulate e.g. high / low water table
+# Step <- ifelse(EddyDataWithPosix$DoY < 200 | EddyDataWithPosix$DoY > 250, 0, 1)
+# EProc <- sEddyProc$new('CRK', cbind(EddyDataWithPosix, Step = Step, QF = QF), c('NEE', 'LE', 'H', 'Rg', 'Tair', 'Tsoil', 'rH', 'VPD', 'QF','SWC_5cm','SWC_20cm', 'Step'))
+# EProc$sMDSGapFill('LE', QFVar = 'QF', QFValue = 0, V1 = 'Rg', T1 = 30, V2 = 'Tsoil', T2 = 2, 'Step', 0.1)
+# grep("LE_.*_f$",names(EProc$sExportResults()), value = TRUE)
+# grep("LE_.*_fsd$",names(EProc$sExportResults()), value = TRUE)
+# 
+# #Now NEE
+# EProc$sMDSGapFill('NEE')
+# 
+# 
+# grep("NEE_.*_f$",names(EProc$sExportResults()), value = TRUE)
+# grep("NEE_.*_fsd$",names(EProc$sExportResults()), value = TRUE)
+#  
+# } else if (sitename == 'NC2') {
+#   EProc$sMDSGapFill('NEE')
+# grep("NEE_.*_f$",names(EProc$sExportResults()), value = TRUE)
+# grep("NEE_.*_fsd$",names(EProc$sExportResults()), value = TRUE)
+#  
+#  
+# } else if (sitename == 'GA') {
+#   EProc$sMDSGapFill('NEE')
+# grep("NEE_.*_f$",names(EProc$sExportResults()), value = TRUE)
+# grep("NEE_.*_fsd$",names(EProc$sExportResults()), value = TRUE)
+#  
+#  
+# } else if (sitename == 'CST') {
+#   EProc$sMDSGapFill('NEE')
+# grep("NEE_.*_f$",names(EProc$sExportResults()), value = TRUE)
+# grep("NEE_.*_fsd$",names(EProc$sExportResults()), value = TRUE)
+#   
+# }
+
+
+
+```
+
+
+
+For leap year 
+
+```{r}
+# Create the QF vector to match exact number of rows
+if (sitename == 'CRK') {
+    # Calculate exact number of repetitions needed
+    # n_repeats <- ceiling(nrow(EddyDataWithPosix) / 10)
+    # # Create the base pattern and truncate to exact length needed
+    # QF <- rep(c(1, 0, 1, 0, 1, 0, 0, 0, 0, 0), n_repeats)[1:nrow(EddyDataWithPosix)]
+    # 
+    # # Rest of your code remains the same
+    # Step <- ifelse(EddyDataWithPosix$DoY < 200 | EddyDataWithPosix$DoY > 250, 0, 1)
+    # 
+    # EProc <- sEddyProc$new('CRK', 
+    #                       cbind(EddyDataWithPosix, Step = Step, QF = QF), 
+    #                       c('NEE', 'LE', 'H', 'Rg', 'Tair', 'Tsoil', 'rH', 'VPD', 'QF', 'SWC_5cm', 'SWC_20cm', 'Step','QC_flag'))
+    # 
+    # # Gap filling for LE
+    # EProc$sMDSGapFill('LE', QFVar = 'QF', QFValue = 0, 
+    #                   V1 = 'Rg', T1 = 30, 
+    #                   V2 = 'Tsoil', T2 = 2, 'Step', 0.1)
+    # 
+    # grep("LE_.*_f$", names(EProc$sExportResults()), value = TRUE)
+    # grep("LE_.*_fsd$", names(EProc$sExportResults()), value = TRUE)
+    
+    # Gap filling for NEE
+# if ( yyear == 2024) {
+#     EProc$sMDSGapFill('NEE')
+# } else {
+#     EProc$sMDSGapFill('NEE', QFVar = 'QC_flag', QFValue = 0)
+# }
+
+  EProc$sMDSGapFill('NEE', QFVar = 'QC_flag', QFValue = 0)
+  
+  
+    grep("NEE_.*_f$", names(EProc$sExportResults()), value = TRUE)
+    grep("NEE_.*_fsd$", names(EProc$sExportResults()), value = TRUE)
+
+} else if (sitename == 'NC2') {
+    EProc$sMDSGapFill('NEE')
+    grep("NEE_.*_f$", names(EProc$sExportResults()), value = TRUE)
+    grep("NEE_.*_fsd$", names(EProc$sExportResults()), value = TRUE)
+
+} else if (sitename == 'GA') {
+    EProc$sMDSGapFill('NEE')
+    grep("NEE_.*_f$", names(EProc$sExportResults()), value = TRUE)
+    grep("NEE_.*_fsd$", names(EProc$sExportResults()), value = TRUE)
+
+} else if (sitename == 'CST') {
+    EProc$sMDSGapFill('NEE')
+    grep("NEE_.*_f$", names(EProc$sExportResults()), value = TRUE)
+    grep("NEE_.*_fsd$", names(EProc$sExportResults()), value = TRUE)
+}
+```
+
+```{r}
+#+++ Example plots of filled data to screen or to directory \plots
+	EProc$sPlotFingerprintY('NEE_f', Year.i=yyear)
+	#EProc$sPlotDailySumsY('NEE_f','NEE_fsd', Year.i=yyear)
+#EProc$sPlotDailySums('NEE_f','NEE_fsd')
+#EProc$Sp
+```
+
+Finger of the new variables shows that gap has been filled 
+```{r}
+
+EProc$sPlotFingerprintY('NEE_f', Year = yyear)
+# EProc$sPlotFingerprintY('LE_f', Year = yyear)
+
+```
+
+
+```{r}
+if (sitename == 'CRK') {
+  EProc$sSetLocationInfo(LatDeg = 31.4629, LongDeg = -95.3415, TimeZoneHour = -6)
+} else if (sitename == 'NC2') {
+  EProc$sSetLocationInfo(LatDeg = 35.8030, LongDeg = -76.6685, TimeZoneHour = -5)
+} else if (sitename == 'GA') {
+  EProc$sSetLocationInfo(LatDeg = 	31.2792, LongDeg =  -84.5329, TimeZoneHour = -5)
+} else if (sitename == 'CST') {
+  EProc$sSetLocationInfo(LatDeg = 	33.0442, LongDeg =  -91.9204, TimeZoneHour = -6)
+}
+
+EProc$sMDSGapFill('Tair', FillAll = FALSE,  minNWarnRunLength = NA)     
+EProc$sMDSGapFill('VPD', FillAll = FALSE,  minNWarnRunLength = NA)    
+EProc$sMDSGapFill('Rg', FillAll = FALSE,  minNWarnRunLength = NA)    
+if (sitename == 'CRK') {
+EProc$sMDSGapFill('SWC_5cm', FillAll = FALSE,  minNWarnRunLength = NA)    
+EProc$sMDSGapFill('SWC_20cm', FillAll = FALSE,  minNWarnRunLength = NA) 
+}
+EProc$sFillVPDFromDew() # fill longer gaps still present in VPD_f
+
+
+#EProc$sMRFluxPartition()
+# Nightime
+
+if (sitename == 'CRK') {
+EProc$sMRFluxPartition(T_ref = 273.15 + 20) # use your site's mean temperature for T_ref
+} else if (sitename == 'NC2'){
+  EProc$sMRFluxPartition(T_ref = 273.15 + 16)
+} else if (sitename == 'GA'){
+  EProc$sMRFluxPartition(T_ref = 273.15 + 20)
+} else if (sitename == 'GA'){
+  EProc$sMRFluxPartition(T_ref = 273.15 + 17)
+}
+
+
+# Below is daytime flux partioning 
+EProc$sGLFluxPartition()
+
+
+
+#EProc$sMRFluxPartition(FluxVar = 'NEE') #Use this when you want to partitition using real NEE only. 
+
+
+```
+
+Flux partitioning 
+
+```{r}
+# sEddyProc_sMRFluxPartition(FluxVar = if (missing(FluxVar.s)) "NEE_f" else FluxVar.s,
+# QFFluxVar = if (missing(QFFluxVar.s)) "NEE_fqc" else QFFluxVar.s,
+# QFFluxValue = if (missing(QFFluxValue.n)) 0L else QFFluxValue.n,
+# TempVar = if (missing(TempVar.s)) "Tair_f" else TempVar.s,
+# QFTempVar = if (missing(QFTempVar.s)) "Tair_fqc" else QFTempVar.s,
+# QFTempValue = if (missing(QFTempValue.n)) 0 else QFTempValue.n,
+# RadVar = if (missing(RadVar.s)) "Rg" else RadVar.s,
+# TRef = if (missing(T_ref.n)) 273.15 +
+# 15 else T_ref.n, suffix = if (missing(Suffix.s)) "" else Suffix.s,
+# FluxVar.s, QFFluxVar.s, QFFluxValue.n,
+# TempVar.s, QFTempVar.s, QFTempValue.n,
+# RadVar.s, T_ref.n, Suffix.s, debug.l,
+# debug = if (!missing(debug.l)) debug.l else list(useLocaltime = FALSE),
+# parsE0Regression = list())
+
+```
+
+
+The results are stored in columns Reco and GPP_f modified by the respective u∗
+ threshold suffix.
+```{r}
+grep("GPP.*_f$|Reco",names(EProc$sExportResults()), value = TRUE)
+```
+Visualizations of the results by a fingerprint plot gives a compact overview.
+```{r}
+EProc$sPlotFingerprintY('GPP_f', Year = yyear)
+```
+
+Storing the results in text 
+Change into NaN for matlab use 
+
+```{r}
+FilledEddyData <- EProc$sExportResults()
+
+class(data)
+class(FilledEddyData)
+CombinedData <- cbind(EddyData, FilledEddyData)
+
+
+# 1) flag night‐time (adjust SW_IN to whatever your radiation variable is)
+# Option 1: Using solar radiation (if you have Rg column)
+#CombinedData$IsNight <- CombinedData$Rg < 10  # Rg < 10 W/m² typically indicates night
+
+
+# 2) create Reco_NT_f:
+# Create Reco_NT_f column with explicit conditions
+# CombinedData$Reco_NT_f <- ifelse(CombinedData$IsNight,
+#                                 # Nighttime logic
+#                                 ifelse(!is.na(CombinedData$NEE_orig), 
+#                                        CombinedData$NEE_orig,    # Use NEE_orig if available
+#                                        CombinedData$Reco),       # Otherwise use Reco
+#                                 # Daytime logic
+#                                 CombinedData$Reco)             # Always use Reco
+# 
+# 
+# 
+# # Create GPP_NT_f column
+# CombinedData$GPP_NT_f <- CombinedData$Reco_NT_f - CombinedData$NEE_f
+
+# Set nighttime GPP_NT_f to 0 (no photosynthesis at night)
+# CombinedData$GPP_NT_f <- ifelse(CombinedData$IsNight, 
+#                                 0, 
+#                                 CombinedData$GPP_NT_f)
+# Set both Reco_NT_f and GPP_NT_f to NA for specific conditions: 
+# DoY 268-365, year 2023, and site 'crk'
+condition <- CombinedData$DoY >= 268 & 
+             CombinedData$DoY <= 365 & 
+             yyear == 2023 & 
+             sitename == "CRK"
+
+CombinedData$Reco <- ifelse(condition, NA, CombinedData$Reco)
+CombinedData$GPP_f <- ifelse(condition, NA, CombinedData$GPP_f)
+CombinedData$NEE_f <- ifelse(condition, NA, CombinedData$NEE_f)
+
+
+CombinedData[is.na(CombinedData)] <- NaN
+
+
+file_name <- paste0(sitename, '_', yyear, '_rpresult.txt')
+full_dir_path <- paste0("C:/Benju/Matlab_data_play/SouthernPine_DataAnalysis/Output Data/Reddyproc/Seasonal/", sitename)
+fWriteDataframeToFile(CombinedData, file_name, Dir = full_dir_path)
+```
+
+Plotting 
+```{r}
+
+# # Method 1: Simple time series plot with all three variables
+# # Create a long format for easier plotting
+# plot_data <- data.frame(
+#   DateTime = CombinedData$DoY,  # Keep as DateTime for consistency
+#   Reco_NT_f = CombinedData$Reco_NT_f,
+#   GPP_NT_f = CombinedData$GPP_NT_f,
+#   NEE_f = CombinedData$NEE_f
+# )
+# 
+# # Convert to long format using reshape2 explicitly
+# plot_data_long <- reshape2::melt(plot_data, id.vars = "DateTime", 
+#                                  variable.name = "FluxType", value.name = "FluxValue")
+# # Create the plot
+# p1 <- ggplot(plot_data_long, aes(x = DateTime, y = FluxValue, color = FluxType)) +
+#   geom_line(alpha = 0.7) +
+#   scale_color_manual(values = c("Reco_NT_f" = "red", 
+#                                 "GPP_NT_f" = "green", 
+#                                 "NEE_f" = "blue")) +
+#   labs(title = paste("Ecosystem Fluxes Time Series -", sitename, yyear),
+#        x = "Date",
+#        y = expression("Flux ("*mu*"mol "*m^{-2}*s^{-1}*")"),
+#        color = "Flux Type") +
+#   theme_minimal() +
+#   theme(legend.position = "bottom")
+# 
+# print(p1)
+# 
+# # Method 2: Separate panels for each flux
+# p2 <- ggplot(plot_data_long, aes(x = DateTime, y = FluxValue)) +
+#   geom_line(aes(color = FluxType), alpha = 0.7) +
+#   facet_wrap(~FluxType, scales = "free_y", ncol = 1) +
+#   scale_color_manual(values = c("Reco_NT_f" = "red", 
+#                                 "GPP_NT_f" = "green", 
+#                                 "NEE_f" = "blue")) +
+#   labs(title = paste("Ecosystem Fluxes - Separate Panels -", sitename, yyear),
+#        x = "Date",
+#        y = expression("Flux ("*mu*"mol "*m^{-2}*s^{-1}*")")) +
+#   theme_minimal() +
+#   theme(legend.position = "none")
+# 
+# print(p2)
+# 
+# p2 <- ggplot(plot_data_long, aes(x = DateTime, y = FluxValue)) +
+#   geom_point(aes(color = FluxType), alpha = 0.7) +
+#   facet_wrap(~FluxType, scales = "free_y", ncol = 1) +
+#   scale_color_manual(values = c("Reco_NT_f" = "red", 
+#                                 "GPP_NT_f" = "green", 
+#                                 "NEE_f" = "blue")) +
+#   labs(title = paste("Ecosystem Fluxes - Separate Panels -", sitename, yyear),
+#        x = "Date",
+#        y = expression("Flux ("*mu*"mol "*m^{-2}*s^{-1}*")")) +
+#   theme_minimal() +
+#   theme(legend.position = "none")
+# 
+# print(p2)
+
+```
+
+DAILY 
+
+```{r}
+daily <- CombinedData %>% group_by(DoY) %>%  summarise(precip = mean(Tair))
+```
+
+ggplot 
+
+
+
+plotting 
+
+
+
+
+
+YOU CAN IGNORE THIS 
+
+UNCERTAINITIES ANALYSIS
+For results use NEE_U95F
+UNCERTAINITIES ANALYSIS
+Uncertainity in GPP due to ustar scenarios 
+
+
+
+
+
+
+Uncertainities asscoiated with NEE 
+This code is from 
+https://cran.r-project.org/web/packages/REddyProc/vignettes/aggUncertainty.html
+1. Computes residuals between original and gapfilled NEE 
+2. Calculate autocorrelation of these resduals to account for the temporal dependence in flux measurement- 
+3. Determines the effective number of observations (nEff) that accounts for this autocorrelation:
+4. Calculates the uncertainty of the mean NEE using variance propagation that accounts for autocorrelation:
+5. Propagates these uncertainties when aggregating from half-hourly to daily or annual values using the principle that random errors are added in quadrature:
+
+Redoing this 
+
+```{r}
+# 1. Calculate residuals and prepare data
+
+# results <- EProc$sExportResults() %>% 
+#   mutate(
+#     resid = ifelse(NEE_fqc == 0, NEE_orig - NEE_fall, NA)
+#     ,NEE_orig_sd = ifelse(
+#       is.finite(.data$NEE_orig), .data$NEE_fsd, NA)
+#   )
+# 
+# results <- EProc$sExportResults() %>% 
+#   mutate(
+#     # Calculate residuals only for measured (not gap-filled) values
+#     resid = ifelse(NEE_fqc == 0, NEE_orig - NEE_fall, NA),
+#     # Get uncertainty estimates for measured values only
+#     NEE_orig_sd = ifelse(is.finite(NEE_orig), NEE_fsd, NA)
+#   )
+# 
+# 
+# 
+# # 2. Calculate autocorrelation and effective number of observations
+# autoCorr <- lognorm::computeEffectiveAutoCorr(results$resid)
+# nEff <- lognorm::computeEffectiveNumObs(results$resid, na.rm = TRUE)
+# c(nEff = nEff, nObs = sum(is.finite(results$resid)))
+# 
+# # 3. Calculate uncertainty of the overall mean
+# resRand <- results %>% summarise(
+#   nRec = sum(is.finite(NEE_orig_sd)),
+#   NEEagg = mean(NEE_f, na.rm = TRUE),
+#   # Correct formula for random uncertainty with autocorrelation
+#   varMean = sum(NEE_orig_sd^2, na.rm = TRUE) / nRec / (!!nEff - 1),
+#   seMean = sqrt(varMean),
+#   # Alternative approximation
+#   seMeanApprox = mean(NEE_orig_sd, na.rm = TRUE) / sqrt(!!nEff - 1)
+# ) %>% select(NEEagg, seMean, seMeanApprox)
+# 
+# # 4. Daily aggregation with proper autocorrelation handling
+# results <- results %>% mutate(
+#   # Add timestamp and day of year
+#   DateTime = EddyDataWithPosix$DateTime,
+#   DoY = as.POSIXlt(DateTime - 15*60)$yday # midnight belongs to previous day
+# )
+# 
+# # Correct daily aggregation
+# aggDay <- results %>% 
+#   group_by( DoY) %>% 
+#   summarise(
+#     DateTime = first(DateTime),
+#     # Use the global autocorrelation for each day
+#     nEff = lognorm::computeEffectiveNumObs(
+#       resid, effAcf = !!autoCorr, na.rm = TRUE),
+#     nRec = sum(is.finite(NEE_orig_sd)),
+#     NEE = mean(NEE_f, na.rm = TRUE),
+#     # Correct formula for daily uncertainty with autocorrelation
+#     sdNEE = if (nEff <= 1) NA_real_ else sqrt(
+#       mean(NEE_orig_sd^2, na.rm = TRUE) / (nEff - 1)),
+#     .groups = "drop"
+#   )
+# 
+# # 5. Annual aggregation
+# # For annual values, we need to convert units and properly propagate uncertainty
+# annual_uncertainty = mean(sdNEE, na.rm = TRUE) / sqrt(n_eff_days)
+# 
+# print(annual_uncertainty)
+
+```
+
+Try another approach - i think this works 
+
+```{r}
+# Calculate daily uncertainty WITHOUT accounting for autocorrelation
+daily_uncertainty <- CombinedData %>%
+  group_by(Year, DoY) %>%
+  summarise(
+    # Count actual measurements per day
+    nRec = sum(is.finite(NEE_fsd)),
+    # Daily mean NEE
+    NEE_daily = mean(NEE_f, na.rm = TRUE),
+    # Daily uncertainty using standard error formula
+    daily_uncertainty = sqrt(mean(NEE_fsd^2, na.rm = TRUE) / (nRec - 1)),
+    .groups = 'drop'
+  )
+
+# Aggregate to annual level WITHOUT accounting for autocorrelation
+annual_uncertainty <- daily_uncertainty %>%
+  group_by(Year) %>%
+  summarise(
+    # Annual mean NEE
+    NEE_annual = mean(NEE_daily, na.rm = TRUE),
+    # Count days with data
+    n_days = sum(!is.na(daily_uncertainty)),
+    # Annual uncertainty - average daily uncertainty divided by sqrt(n_days)
+    annual_uncertainty = mean(daily_uncertainty, na.rm = TRUE) / sqrt(n_days),
+    # Convert to g C/m²/year
+    multiplier = 12 * 10^(-6) * 60 * 60 * 24 * 365,
+    NEE_annual_gC = NEE_annual * multiplier,
+    annual_uncertainty_gC = annual_uncertainty * multiplier,
+    .groups = 'drop'
+  )
+
+print(annual_uncertainty)
+```
+
+For 2023 annual uncertainity is 10 for 9 months
+including 12 months, uncertainity is 
+
+Account fot autoorrelation
+```{r}
+library(dplyr)
+library(forecast)  # For acf() function
+
+# Step 1: Calculate daily uncertainty WITH autocorrelation
+daily_uncertainty <- CombinedData %>%
+  group_by(Year, DoY) %>%
+  summarise(
+    # Count actual measurements per day
+    nRec = sum(is.finite(NEE_fsd)),
+    # Daily mean NEE
+    NEE_daily = mean(NEE_f, na.rm = TRUE),
+    # Daily uncertainty using standard error formula
+    daily_uncertainty = sqrt(mean(NEE_fsd^2, na.rm = TRUE) / (nRec - 1)),
+    .groups = 'drop'
+  )
+
+# Step 2: Calculate autocorrelation and effective sample size
+# Combine all daily NEE data into a single time series
+nee_time_series <- CombinedData$NEE_f[is.finite(CombinedData$NEE_f)]
+
+# Compute autocorrelation function (ACF)
+acf_result <- acf(nee_time_series, plot = FALSE, lag.max = 100)
+
+# Find the lag where autocorrelation drops to near zero
+lag_zero <- which(acf_result$acf < 0.05)[1]  # First lag where ACF < 0.05
+
+# Calculate effective sample size (N_eff)
+N_total <- length(nee_time_series)  # Total number of observations
+N_eff <- N_total / lag_zero  # Effective sample size
+
+# Step 3: Adjust daily uncertainty for autocorrelation
+daily_uncertainty <- daily_uncertainty %>%
+  mutate(
+    daily_uncertainty_autocorr = daily_uncertainty * sqrt(lag_zero)
+  )
+
+# Step 4: Aggregate to annual level WITH autocorrelation
+annual_uncertainty <- daily_uncertainty %>%
+  group_by(Year) %>%
+  summarise(
+    # Annual mean NEE
+    NEE_annual = mean(NEE_daily, na.rm = TRUE),
+    # Count days with data
+    n_days = sum(!is.na(daily_uncertainty_autocorr)),
+    # Annual uncertainty - average daily uncertainty divided by sqrt(n_days)
+    annual_uncertainty = mean(daily_uncertainty_autocorr, na.rm = TRUE) / sqrt(n_days),
+    # Convert to g C/m²/year
+    multiplier = 12 * 10^(-6) * 60 * 60 * 24 * 365,
+    NEE_annual_gC = NEE_annual * multiplier,
+    annual_uncertainty_gC = annual_uncertainty * multiplier,
+    .groups = 'drop'
+  )
+
+print(annual_uncertainty)
+```
+
+## Gapfilling uncertainity 
+
+```{r}
+# Check ALL uncertainty-related columns
+uncertainty_cols <- grep("_fsd|_fqc|uncertainty|sd", names(EProc$sExportResults()), 
+                         value = TRUE, ignore.case = TRUE)
+print("Available uncertainty columns:")
+print(uncertainty_cols)
+
+# Specifically check for GPP and Reco uncertainties
+flux_uncertainties <- grep("GPP.*_fsd|Reco.*_fsd|GPP.*uncertainty|Reco.*uncertainty", 
+                          names(EProc$sExportResults()), value = TRUE, ignore.case = TRUE)
+print("GPP/Reco uncertainty columns:")
+print(flux_uncertainties)
+```
+
+
+
+CHECK
+
+```{r}
+# Add this at the end of your code, right after the uncertainty analysis
+
+# Plot original NEE vs gap-filled NEE
+library(ggplot2)
+
+# Check what NEE columns we have
+nee_cols <- grep("NEE", names(CombinedData), value = TRUE)
+print("Available NEE columns:")
+print(nee_cols)
+
+# Create comparison plot
+if("NEE" %in% names(CombinedData) && "NEE_f" %in% names(CombinedData)) {
+  
+  # Create a data frame for plotting
+  plot_data <- data.frame(
+    DoY = CombinedData$DoY,
+    NEE_orig = CombinedData$NEE,        # Original NEE
+    NEE_filled = CombinedData$NEE_f,    # Gap-filled NEE
+    Year = CombinedData$Year
+  )
+  
+  # Time series plot
+  p1 <- ggplot(plot_data, aes(x = DoY)) +
+    geom_point(aes(y = NEE_orig, color = "Original"), alpha = 0.6, size = 0.8) +
+    geom_point(aes(y = NEE_filled, color = "Gap-filled"), alpha = 0.6, size = 0.8) +
+    scale_color_manual(values = c("Original" = "blue", "Gap-filled" = "red")) +
+    labs(x = "Day of Year", 
+         y = "NEE (μmol CO₂ m⁻² s⁻¹)",
+         title = paste("Original vs Gap-filled NEE -", yyear),
+         color = "Data Type") +
+    theme_minimal() +
+    facet_wrap(~Year)
+  
+  print(p1)
+  
+  # Scatter plot comparison
+  p2 <- ggplot(plot_data, aes(x = NEE_orig, y = NEE_filled)) +
+    geom_point(alpha = 0.5) +
+    geom_abline(slope = 1, intercept = 0, color = "red", linetype = "dashed") +
+    labs(x = "Original NEE", 
+         y = "Gap-filled NEE",
+         title = "Original vs Gap-filled NEE Scatter Plot") +
+    theme_minimal()
+  
+  print(p2)
+  
+  # Print summary statistics
+  cat("\nSummary comparison:\n")
+  cat("Original NEE - Mean:", mean(plot_data$NEE_orig, na.rm = TRUE), "\n")
+  cat("Gap-filled NEE - Mean:", mean(plot_data$NEE_filled, na.rm = TRUE), "\n")
+  cat("Number of original measurements:", sum(!is.nan(plot_data$NEE_orig)), "\n")
+  cat("Number of gap-filled values:", sum(!is.nan(plot_data$NEE_filled)), "\n")
+  
+} else {
+  print("Could not find both NEE and NEE_f columns for comparison")
+  print("Available columns:")
+  print(names(CombinedData)[grep("NEE", names(CombinedData))])
+}
+
+# Check if original data was preserved
+if("NEE" %in% names(EddyData) && "NEE" %in% names(CombinedData)) {
+  original_preserved <- identical(EddyData$NEE, CombinedData$NEE)
+  cat("\nOriginal NEE data preserved:", original_preserved, "\n")
+} else {
+  cat("\nCannot verify if original NEE was preserved - column missing\n")
+}
+```
+
+
+```{r}
+ggplot(data =CombinedData)+
+  geom_point(aes(x= Tair, y =Reco ))
+```
+

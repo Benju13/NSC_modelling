@@ -122,16 +122,26 @@ A fingerprint-plot is a color-coded image of the half-hourly fluxes by
 daytime on the x and and day of the year on the y axis.
 
 ``` r
-EProc$sPlotFingerprintY('NEE', Year = yyear)
+print(EProc$sPlotFingerprintY('NEE', Year = yyear))
 ```
 
 ![](Reddyproc_seasonal_ustar_files/figure-gfm/unnamed-chunk-2-1.png)<!-- -->
+
+    ## NULL
 
 ``` r
 EProc$sPlotFingerprintY('LE', Year = yyear)
 ```
 
 ![](Reddyproc_seasonal_ustar_files/figure-gfm/unnamed-chunk-2-2.png)<!-- -->
+
+``` r
+print(EProc$sPlotFingerprintY('NEE', Year = yyear))
+```
+
+![](Reddyproc_seasonal_ustar_files/figure-gfm/unnamed-chunk-2-3.png)<!-- -->
+
+    ## NULL
 
 \#Estimating ustar threshold based on Papale et al., 2006 The second
 step, is the estimation of the distribution of uStar thresholds, to
