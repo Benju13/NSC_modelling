@@ -122,26 +122,27 @@ A fingerprint-plot is a color-coded image of the half-hourly fluxes by
 daytime on the x and and day of the year on the y axis.
 
 ``` r
-print(EProc$sPlotFingerprintY('NEE', Year = yyear))
+dir.create("Chapter1_figures", showWarnings = FALSE)
+png(paste0("Chapter1_figures/fingerprint_NEE_", yyear, ".png"), 
+    width = 1800, height = 1200, res = 150)
+EProc$sPlotFingerprintY('NEE', Year = yyear)
+dev.off()   
+```
+
+    ## png 
+    ##   2
+
+``` r
+EProc$sPlotFingerprintY('NEE', Year = yyear)
 ```
 
 ![](Reddyproc_seasonal_ustar_files/figure-gfm/unnamed-chunk-2-1.png)<!-- -->
-
-    ## NULL
 
 ``` r
 EProc$sPlotFingerprintY('LE', Year = yyear)
 ```
 
 ![](Reddyproc_seasonal_ustar_files/figure-gfm/unnamed-chunk-2-2.png)<!-- -->
-
-``` r
-print(EProc$sPlotFingerprintY('NEE', Year = yyear))
-```
-
-![](Reddyproc_seasonal_ustar_files/figure-gfm/unnamed-chunk-2-3.png)<!-- -->
-
-    ## NULL
 
 \#Estimating ustar threshold based on Papale et al., 2006 The second
 step, is the estimation of the distribution of uStar thresholds, to
@@ -332,14 +333,28 @@ if (sitename == 'CRK') {
 Finger of the new variables shows that gap has been filled
 
 ``` r
+png(paste0("Chapter1_figures/fingerprint_NEE_f", yyear, ".png"), 
+    width = 1800, height = 1200, res = 150)
 EProc$sPlotFingerprintY('NEE_f', Year = yyear)
+dev.off()
 ```
 
-![](Reddyproc_seasonal_ustar_files/figure-gfm/unnamed-chunk-6-1.png)<!-- -->
+    ## png 
+    ##   2
 
 ``` r
 # EProc$sPlotFingerprintY('LE_f', Year = yyear)
+
+png(paste0("Chapter1_figures/fingerprint_NEE_", yyear, ".png"), 
+    width = 1800, height = 1200, res = 150)
+EProc$sPlotFingerprintY('NEE', Year = yyear)
+dev.off()  
 ```
+
+    ## png 
+    ##   2
+
+\## NEE Fingerprint Plot ![](Chapter1_figures/fingerprint_NEE_2024.png)
 
 ``` r
 if (sitename == 'CRK') {

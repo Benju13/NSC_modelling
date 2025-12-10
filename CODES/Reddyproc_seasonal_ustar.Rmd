@@ -2,7 +2,7 @@
 title: "Reddyproc_seasonal"
 author: "Benju"
 date: "2024-01-22"
-output: github_document
+output:  rmarkdown::github_document
 ---
 USED FOR CRK 2022, 2023, 2024
 Seasonal ustar filtering works better than the reddyproc ustar 
@@ -102,6 +102,11 @@ if (sitename == 'CRK') {
 
 A fingerprint-plot of the source half-hourly shows already several gaps. A fingerprint-plot is a color-coded image of the half-hourly fluxes by daytime on the x and and day of the year on the y axis.
 ```{r}
+dir.create("Chapter1_figures", showWarnings = FALSE)
+png(paste0("Chapter1_figures/fingerprint_NEE_", yyear, ".png"), 
+    width = 1800, height = 1200, res = 150)
+EProc$sPlotFingerprintY('NEE', Year = yyear)
+dev.off()   
 EProc$sPlotFingerprintY('NEE', Year = yyear)
 EProc$sPlotFingerprintY('LE', Year = yyear)
 ```
@@ -223,12 +228,21 @@ if (sitename == 'CRK') {
 
 Finger of the new variables shows that gap has been filled 
 ```{r}
-
+png(paste0("Chapter1_figures/fingerprint_NEE_f", yyear, ".png"), 
+    width = 1800, height = 1200, res = 150)
 EProc$sPlotFingerprintY('NEE_f', Year = yyear)
+dev.off()
 # EProc$sPlotFingerprintY('LE_f', Year = yyear)
 
-```
+png(paste0("Chapter1_figures/fingerprint_NEE_", yyear, ".png"), 
+    width = 1800, height = 1200, res = 150)
+EProc$sPlotFingerprintY('NEE', Year = yyear)
+dev.off()  
 
+```
+ 
+ ## NEE Fingerprint Plot
+![](Chapter1_figures/fingerprint_NEE_2024.png)
 
 ```{r}
 if (sitename == 'CRK') {
