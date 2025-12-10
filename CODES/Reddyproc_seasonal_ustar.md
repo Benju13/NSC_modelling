@@ -356,7 +356,7 @@ dev.off()
 
 markdown
 
-\## NEE Fingerprint Plot ![](Chapter1_figures/fingerprint_NEE_2024.png)
+![](../Chapter1_figures/fingerprint_NEE_2024.png)
 
 ``` r
 if (sitename == 'CRK') {
